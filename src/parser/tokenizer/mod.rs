@@ -1,52 +1,9 @@
-use std::collections::HashMap;
+use token::Token;
+use token_table::TokenTable;
 
-/// The types of tokens
-/// They used to divide symbol and char to simplify resolving of token and lex convertion.
-#[derive(Clone, Copy)]
-pub enum TokenType {
-    /// i.e. symbols what need me to care about
-    Symbol,
-    /// i.e. normal chars
-    Char,
-}
+pub mod token;
+pub mod token_table;
 
-pub struct Token {
-    pub value: char,
-    pub typ: TokenType,
-}
-
-impl Token {
-    pub fn new(value: char, typ: TokenType) -> Self {
-        Token {
-            value,
-            typ,
-        }
-    }
-}
-
-/// Saves all the tokens and defined some useful functions used to operate the tokens and convert types between char and token.
-/// Namely, it provides a easy way to build the mapping between char and token.
-/// Ideally, it maintained a HashMap type what saved the information about char and token.
-/// When `get()` method called, it will retrieve corresponding token type in the `HashMap` type by given char.
-pub trait TokenTable {
-    fn get_tokens_table(&self) -> HashMap<char, TokenType>;
-    fn get_typ(&mut self, value: &char) -> Option<TokenType> {
-        let tokens_table = self.get_tokens_table();
-        let maybe_token_type = tokens_table.get(value);
-        if let Some(token_type) = maybe_token_type {
-            Some(*token_type)
-        } else {
-            None
-        }
-    }
-    fn build_token(&mut self, value: &char) -> Option<Token> {
-        if let Some(typ) = self.get_typ(value) {
-            Some(Token::new(*value, typ))
-        } else {
-            None
-        }
-    }
-}
 
 pub struct Tokenizer<T, Y>
 where
@@ -57,12 +14,15 @@ where
     pub token_table: Y,
 }
 
-impl<U, V> Tokenizer<U, V> {
-    pub fn new<T>(
-        chars: Box<T>,
-        token_table: Box<dyn TokenTable>
-    ) -> Self
-    where T: Iterator<Item = char> + 'static {
+impl<U, V> Tokenizer<U, V>
+where
+    U: Iterator<Item = char>,
+    V: TokenTable
+{
+    pub fn new(
+        chars: U,
+        token_table: V 
+    ) -> Self {
         Tokenizer {
             chars_stream: chars,
             token_table
@@ -70,7 +30,11 @@ impl<U, V> Tokenizer<U, V> {
     }
 }
 
-impl Iterator for Tokenizer {
+impl<T, U> Iterator for Tokenizer<T, U>
+where
+    T: Iterator<Item = char>,
+    U: TokenTable
+{
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -84,6 +48,9 @@ impl Iterator for Tokenizer {
 
 #[test]
 fn dick() {
+    use std::collections::HashMap;
+    use self::token::TokenType;
+
     struct TokenTableImpl;
     impl TokenTable for TokenTableImpl {
         fn get_tokens_table(&self) -> HashMap<char, TokenType> {
@@ -97,8 +64,12 @@ fn dick() {
             ])
         }
     }
-    let tokenizer = Tokenizer::new(
-        Box::new(vec!['a', 'b', 'c', 'd', 'e', 'f'].iter()),
-        Box::new(TokenTableImpl)
+    let mut tokenizer = Tokenizer::new(
+        vec!['a', 'b', 'c', 'd', 'e', 'f'].into_iter(),
+        TokenTableImpl,
     );
+    assert_eq!(tokenizer.next().unwrap(), Token::new('a', TokenType::Char));
+    tokenizer.next();
+    tokenizer.next();
+    assert_eq!(tokenizer.next().unwrap(), Token::new('d', TokenType::Symbol));
 }
