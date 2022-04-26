@@ -48,28 +48,28 @@ where
 
 #[test]
 fn dick() {
-    use std::collections::HashMap;
-    use self::token::RawTokenType;
+  use std::collections::HashMap;
+  use self::token::RawTokenType;
 
-    struct TokenTableImpl;
-    impl RawTokenTable for TokenTableImpl {
-        fn get_tokens_table(&self) -> HashMap<char, RawTokenType> {
-            HashMap::from([
-                ('a', RawTokenType::Char),
-                ('b', RawTokenType::Char),
-                ('c', RawTokenType::Char),
-                ('d', RawTokenType::Symbol),
-                ('e', RawTokenType::Symbol),
-                ('f', RawTokenType::Symbol),
-            ])
-        }
+  struct TokenTableImpl;
+  impl RawTokenTable for TokenTableImpl {
+    fn get_tokens_table(&self) -> HashMap<char, RawTokenType> {
+      HashMap::from([
+        ('a', RawTokenType::Char),
+        ('b', RawTokenType::Char),
+        ('c', RawTokenType::Char),
+        ('d', RawTokenType::Symbol),
+        ('e', RawTokenType::Symbol),
+        ('f', RawTokenType::Symbol),
+      ])
     }
-    let mut tokenizer = Tokenizer::new(
-        vec!['a', 'b', 'c', 'd', 'e', 'f'].into_iter(),
-        TokenTableImpl,
-    );
-    assert_eq!(tokenizer.next().unwrap(), RawToken::new('a', RawTokenType::Char));
-    tokenizer.next();
-    tokenizer.next();
-    assert_eq!(tokenizer.next().unwrap(), RawToken::new('d', RawTokenType::Symbol));
+  }
+  let mut tokenizer = Tokenizer::new(
+    vec!['a', 'b', 'c', 'd', 'e', 'f'].into_iter(),
+    TokenTableImpl,
+  );
+  assert_eq!(tokenizer.next().unwrap(), RawToken::new('a', RawTokenType::Char));
+  tokenizer.next();
+  tokenizer.next();
+  assert_eq!(tokenizer.next().unwrap(), RawToken::new('d', RawTokenType::Symbol));
 }
