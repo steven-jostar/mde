@@ -1,5 +1,74 @@
 pub type ParserResult<O> = Result<(String, O), String>;
 
+pub fn map<'a, P, A, B, F>(parser: P, map_fn: F) -> BoxedParser<'a, B>
+where
+  P: Parser<'a, A> + 'a,
+  A: 'a,
+  B: 'a,
+  F: Fn(A) -> B + 'a
+{
+  BoxedParser::new(
+    move |input: String| {
+      parser.parse(input).map(|(next_input, result)| (next_input, map_fn(result)))
+    }
+  )
+}
+
+pub fn and<'a, P1, P2, A, B>(p1: P1, p2: P2) -> BoxedParser<'a, (A, B)>
+where
+  A: 'a,
+  B: 'a,
+  P1: Parser<'a, A> + 'a,
+  P2: Parser<'a, B> + 'a,
+{
+  BoxedParser::new(
+    move |input: String| {
+      p1.parse(input).and_then(|(next_input, result_a)| {
+        p2.parse(next_input).map(|(next_input, result_b)| {
+          (next_input, (result_a, result_b))
+        })
+      })
+    }
+  )
+}
+
+pub fn left<'a, P1, P2, A, B>(p1: P1, p2: P2) -> BoxedParser<'a, A>
+where
+  P1: Parser<'a, A> + 'a,
+  P2: Parser<'a, B> + 'a,
+  A: 'a,
+  B: 'a,
+{
+  and(p1, p2).map(|(left, _right)| left)
+}
+
+pub fn right<'a, P1, P2, A, B>(p1: P1, p2: P2) -> BoxedParser<'a, B>
+where
+  P1: Parser<'a, A> + 'a,
+  P2: Parser<'a, B> + 'a,
+  A: 'a,
+  B: 'a,
+{
+  and(p1, p2).map(|(_left, right)| right)
+}
+
+pub fn select<'a, P, A>(parsers: Vec<P>) -> BoxedParser<'a, A>
+where
+  P: Parser<'a, A> + 'a,
+  A: 'a,
+{
+  BoxedParser::new(
+    move |input: String| {
+      for parser in parsers.iter() {
+        if let Ok((next_input, result)) = parser.parse(input.clone()) {
+          return Ok((next_input, result));
+        }
+      }
+      Err(input)
+    }
+  )
+}
+
 pub trait Parser<'a, Output: 'a> {
   fn parse(&self, input: String) -> ParserResult<Output>;
 
@@ -8,49 +77,12 @@ pub trait Parser<'a, Output: 'a> {
     F: Fn(Output) -> A + 'a,
     Self: Sized + 'a
   {
-    BoxedParser::new(
-      move |input: String| {
-        self
-          .parse(input)
-          .map(|(next_input, result)| (next_input, map_fn(result)))
-      }
-    )
+    map(self, map_fn)
   }
-  fn pair<P, A>(self, parser: P) -> BoxedParser<'a, (Output, A)>
+
+  fn until<F>(self, condition: F) -> BoxedParser<'a, Vec<Output>>
   where
-    P: Parser<'a, A> + 'a,
-    A: 'a,
-    Self: Sized + 'a
-  {
-    BoxedParser::new(
-      move |input: String| {
-        self.parse(input).and_then(|(next_input, result_a)| {
-          parser.parse(next_input).map(|(next_input, result_b)| {
-            (next_input, (result_a, result_b))
-          })
-        })
-      }
-    )
-  }
-  fn left<P, A>(self, parser: P) -> BoxedParser<'a, Output>
-  where
-    P: Parser<'a, A> + 'a,
-    A: 'a,
-    Self: Sized + 'a
-  {
-    self.pair(parser).map(|(left, _right)| left)
-  }
-  fn right<P, A>(self, parser: P) -> BoxedParser<'a, A>
-  where
-    P: Parser<'a, A> + 'a,
-    A: 'a,
-    Self: Sized + 'a
-  {
-    self.pair(parser).map(|(_left, right)| right)
-  }
-  fn until<F>(&'a self, condition: F) -> BoxedParser<'a, Vec<Output>>
-  where
-    F: Fn(Output) -> Option<Output> + 'a,
+    F: Fn((&'a String, &'a Output)) -> bool + 'a,
     Self: Sized + 'a,
   {
     BoxedParser::new(
@@ -58,7 +90,7 @@ pub trait Parser<'a, Output: 'a> {
         let mut result = Vec::new();
         let mut input = input;
         if let Ok((first_input, first_result)) = self.parse(input.clone()) {
-          if let Some(first_result) = condition(first_result) {
+          if condition((&first_input, &first_result)) {
             result.push(first_result);
             input = first_input;
           } else {
@@ -68,7 +100,7 @@ pub trait Parser<'a, Output: 'a> {
           return Err(input);
         }
         while let Ok((next_input, item)) = self.parse(input.clone()) {
-          if let Some(item) = condition(item) {
+          if condition((&next_input, &item)) {
             result.push(item);
             input = next_input;
             continue;
@@ -81,17 +113,39 @@ pub trait Parser<'a, Output: 'a> {
     )
   }
 
+  fn repeat(self, count: usize) -> BoxedParser<'a, Vec<Output>>
+  where
+    Self: Sized + 'a
+  {
+    BoxedParser::new(
+      move |input: String| {
+        let mut input = input;
+        let mut result = Vec::new();
+        for _ in 0..count {
+          if let Ok((next_input, item)) = self.parse(input.clone()) {
+            input = next_input;
+            result.push(item);
+          } else {
+            return Err(input);
+          }
+        }
+        Ok((input, result))
+      }
+    )
+  }
+
   fn condition<F>(self, condition: F) -> BoxedParser<'a, Output>
   where
-    F: Fn(Output) -> Option<Output> + 'a,
+    F: Fn((&'a String, &'a Output)) -> bool + 'a,
     Self: Sized + 'a,
   {
     BoxedParser::new(
       move |input: String| {
         self.parse(input).and_then(|(next_input, result)| {
-          match condition(result) {
-            Some(result) => Ok((next_input, result)),
-            None => Err(next_input),
+          if condition((&next_input, &result)) {
+            return Ok((next_input, result))
+          } else {
+            return Err(next_input);
           }
         })
       }
