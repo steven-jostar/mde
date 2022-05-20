@@ -80,9 +80,9 @@ pub trait Parser<'a, Output: 'a> {
     map(self, map_fn)
   }
 
-  fn until<F>(self, condition: F) -> BoxedParser<'a, Vec<Output>>
+  fn until_one<F>(self, condition: F) -> BoxedParser<'a, Vec<Output>>
   where
-    F: Fn((&'a String, &'a Output)) -> bool + 'a,
+    F: for<'b> Fn((&'b String, &'b Output)) -> bool + 'a,
     Self: Sized + 'a,
   {
     BoxedParser::new(
@@ -113,6 +113,33 @@ pub trait Parser<'a, Output: 'a> {
     )
   }
 
+  fn until<F>(self, condition: F) -> BoxedParser<'a, Vec<Output>>
+  where
+    F: for<'b> Fn((&'b String, &'b Output)) -> bool + 'a,
+    Self: Sized + 'a,
+  {
+    BoxedParser::new(
+      move |input: String| {
+        let mut input = input;
+        let mut results: Vec<Output> = Vec::new();
+        loop {
+          let result = self.parse(input.clone());
+          if let Ok((next_input, item)) = result {
+            if condition((&next_input, &item)) {
+              results.push(item);
+              input = next_input;
+            } else {
+              break;
+            }
+          } else {
+            return Err(input);
+          }
+        }
+        Ok((input, results))
+      }
+    )
+  }
+
   fn repeat(self, count: usize) -> BoxedParser<'a, Vec<Output>>
   where
     Self: Sized + 'a
@@ -136,16 +163,16 @@ pub trait Parser<'a, Output: 'a> {
 
   fn condition<F>(self, condition: F) -> BoxedParser<'a, Output>
   where
-    F: Fn((&'a String, &'a Output)) -> bool + 'a,
+    F: for<'b> Fn((&'b String, &'b Output)) -> bool + 'a,
     Self: Sized + 'a,
   {
     BoxedParser::new(
       move |input: String| {
         self.parse(input).and_then(|(next_input, result)| {
           if condition((&next_input, &result)) {
-            return Ok((next_input, result))
+            Ok((next_input, result))
           } else {
-            return Err(next_input);
+            Err(next_input)
           }
         })
       }
