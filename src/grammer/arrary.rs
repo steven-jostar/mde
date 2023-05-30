@@ -1,29 +1,23 @@
 use crate::grammer::object::*;
+use crate::grammer::punct::*;
 use crate::parser::*;
 use crate::tokens::*;
-use crate::utils::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArraryItem {
-  pub value: Value,
-  pub comma: Comma,
-}
+pub struct ArraryItem(pub Value);
 impl<'a> Parser<'a> for ArraryItem {
   fn parse(context: &mut ParserContext<'a>) -> Result<Self, String>
   where
     Self: Sized,
   {
-    Ok(ArraryItem {
-      value: context.parse()?,
-      comma: context.parse()?,
-    })
+    Ok(ArraryItem(context.parse()?))
   }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Arrary {
   start: LBracket,
-  items: Vec<ArraryItem>,
+  items: Punctuated<Value, Comma>,
   end: RBracket,
 }
 impl<'a> Parser<'a> for Arrary {
@@ -33,7 +27,7 @@ impl<'a> Parser<'a> for Arrary {
   {
     Ok(Arrary {
       start: context.parse()?,
-      items: repeat(context),
+      items: context.parse()?,
       end: context.parse()?,
     })
   }

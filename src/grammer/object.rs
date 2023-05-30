@@ -1,11 +1,11 @@
-use crate::grammer::number::*;
-use crate::grammer::string::*;
 use crate::grammer::arrary::*;
 use crate::grammer::boolean::*;
+use crate::grammer::number::*;
+use crate::grammer::punct::*;
+use crate::grammer::string::*;
 
 use crate::parser::*;
 use crate::tokens::*;
-use crate::utils::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Key(pub LitString);
@@ -63,7 +63,6 @@ impl<'a> Parser<'a> for Value {
 ///     point: Point,
 ///     frac: None,
 ///   }),
-///   comma: Comma,
 /// }))
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,7 +70,6 @@ pub struct ObjectItem {
   pub key: Key,
   pub colon: Colon,
   pub value: Value,
-  pub comma: Comma,
 }
 impl<'a> Parser<'a> for ObjectItem {
   fn parse(context: &mut ParserContext<'a>) -> Result<Self, String>
@@ -82,7 +80,6 @@ impl<'a> Parser<'a> for ObjectItem {
       key: context.parse()?,
       colon: context.parse()?,
       value: context.parse()?,
-      comma: context.parse()?,
     })
   }
 }
@@ -90,7 +87,7 @@ impl<'a> Parser<'a> for ObjectItem {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Object {
   pub start: LBrace,
-  pub items: Vec<ObjectItem>,
+  pub items: Punctuated<ObjectItem, Comma>,
   pub end: RBrace,
 }
 impl<'a> Parser<'a> for Object {
@@ -100,7 +97,7 @@ impl<'a> Parser<'a> for Object {
   {
     Ok(Object {
       start: context.parse()?,
-      items: repeat(context),
+      items: context.parse()?,
       end: context.parse()?,
     })
   }

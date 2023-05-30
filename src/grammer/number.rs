@@ -1,5 +1,6 @@
 use crate::parser::*;
 use crate::tokens::*;
+use crate::utils::*;
 
 pub fn is_number(char: char) -> bool {
   "1234567890".contains(char)
@@ -12,6 +13,7 @@ impl<'a> Parser<'a> for UnsignedNum {
   where
     Self: Sized,
   {
+    skip_white_spaces(context);
     let mut number = String::new();
     if let Some(char) = context.peekable().peek() {
       if is_number(*char) {
@@ -48,6 +50,7 @@ impl<'a> Parser<'a> for NumberSym {
   where
     Self: Sized,
   {
+    skip_white_spaces(context);
     context
       .parse::<Plus>()
       .map(NumberSym::Positive)
